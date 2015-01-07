@@ -1,26 +1,22 @@
 /*
- * phantomjs rasteriser server
- *
- * Usage:
- *   phantomjs rasterizer.js [basePath] [port] [defaultViewportSize]
+ * SlimerJS rasteriser server
  *
  * This starts an HTTP server waiting for screenshot requests
  */
-var basePath = phantom.args[0] || '/tmp/'; 
 
-var port  = phantom.args[1] || 3001;
+var basePath            = slimer.args[0] || '/tmp/'; 
+var port                = slimer.args[1] || 3001;
+var defaultViewportSize = slimer.args[2] || '';
 
-var defaultViewportSize = phantom.args[2] || '';
 defaultViewportSize = defaultViewportSize.split('x');
 defaultViewportSize = {
-  width: ~~defaultViewportSize[0] || 1024,
-  height: ~~defaultViewportSize[1] || 600
+		width: ~~defaultViewportSize[0] || 1024,
+		height: ~~defaultViewportSize[1] || 600
 };
 
 var pageSettings = ['javascriptEnabled', 'loadImages', 'localToRemoteUrlAccessEnabled', 'userAgent', 'userName', 'password'];
 
 var server, service;
-
 var redirectUrl = '';
 
 server = require('webserver').create();
@@ -65,77 +61,87 @@ service = server.listen(port, function(request, response) {
     response.close();
     return;
   }
-  var url = request.headers.url;
-  var path = basePath + (request.headers.filename || (url.replace(new RegExp('https?://'), '').replace(/\//g, '.') + '.png'));
-  var page = new WebPage();
-  var delay = request.headers.delay || 0;
-  try {
-    page.viewportSize = {
-      width: request.headers.width || defaultViewportSize.width,
-      height: request.headers.height || defaultViewportSize.height
-    };
-    if (request.headers.clipRect) {
-      page.clipRect = JSON.parse(request.headers.clipRect);
-    }
-    for (name in pageSettings) {
-      if (value = request.headers[pageSettings[name]]) {
-        value = (value == 'false') ? false : ((value == 'true') ? true : value);
-        page.settings[pageSettings[name]] = value;
-      }
-    }
-  } catch (err) {
-    response.statusCode = 500;
-    response.write('Error while parsing headers: ' , err);
-    return response.close();
-  }
+		var url = request.headers.url;
+		var path = basePath + (request.headers.filename || (url.replace(new RegExp('https?://'), '').replace(/\//g, '.') + '.png'));
+		var delay = request.headers.delay || 0;
 
-  page.onResourceReceived = function(resource) {
-    if (url == resource.url && resource.redirectURL) {
-      redirectURL = resource.redirectURL;
-    }
-  };
+//  var page = new WebPage();
+/*
+		try {
+				page.viewportSize = {
+						width: request.headers.width || defaultViewportSize.width,
+						height: request.headers.height || defaultViewportSize.height
+				};
+				if (request.headers.clipRect) {
+						page.clipRect = JSON.parse(request.headers.clipRect);
+				}
+				for (name in pageSettings) {
+						if (value = request.headers[pageSettings[name]]) {
+								value = (value == 'false') ? false : ((value == 'true') ? true : value);
+								page.settings[pageSettings[name]] = value;
+						}
+				}
+		} catch (err) {
+				response.statusCode = 500;
+				response.write('Error while parsing headers: ' , err);
+				return response.close();
+		}
 
-	page.evaluate(function() {
+		page.onResourceReceived = function(resource) {
+				if (url == resource.url && resource.redirectURL) {
+						redirectURL = resource.redirectURL;
+				}
+		};
+		
+		page.onError = function(msg, trace) {
+				console.log('Uh-oh',msg);
+				trace.forEach(function(item) {
+						console.log('Uh-oh', item.file, ':', item.line);
+				});
+		}
+*/
 
-			// See: http://www.netlobo.com/javascript-insertafter.html
-			var insertAfter = function( referenceNode, newNode )
-			{
-					console.log("NODE: ", referenceNode);
-					referenceNode.parentNode.insertBefore( newNode, referenceNode.nextSibling );
-			}
+		var page = require('webpage').create();
 
-			var style = document.createElement('style');
-			var text = document.createTextNode('body { background: #fff }');
+		page.onError = function(msg, trace) {
+				console.log('Uh-oh',msg);
+				trace.forEach(function(item) {
+						console.log('Uh-oh', item.file, ':', item.line);
+				});
+		}
 
-			style.setAttribute('type', 'text/css');
-			style.appendChild(text);
-			//insertAfter(style, document.head.firstChild);
-			document.head.insertBefore(style, document.head.lastChild);
-	});
+		page.open(url)
+				.then(
+						function(){
+								try {
+										page.viewportSize = {
+												width: request.headers.width || defaultViewportSize.width,
+												height: request.headers.height || defaultViewportSize.height
+										};
+										if (request.headers.clipRect) {
+												page.clipRect = JSON.parse(request.headers.clipRect);
+										}
+										for (name in pageSettings) {
+												if (value = request.headers[pageSettings[name]]) {
+														value = (value == 'false') ? false : ((value == 'true') ? true : value);
+														page.settings[pageSettings[name]] = value;
+												}
+										}
+								} catch (err) {
+										response.statusCode = 500;
+										response.write('Error while parsing headers: ' , err);
+										return response.close();
+								}
 
-	page.onError = function(msg, trace) {
-			console.log('Uh-oh',msg);
-			trace.forEach(function(item) {
-					console.log('Uh-oh', item.file, ':', item.line);
-			});
-	}
+								window.setTimeout(function () {
+										page.render(path, { format: "jpg", quality: 30 });
+										response.statusCode = 200;
+										response.write('Success: Screenshot saved to ' + path + "\n");
+										page.release();
+										response.close();
+								}, delay);
+						});
 
-  page.open(url, function(status) {
-    if (status == 'success') {
-      window.setTimeout(function () {
-        page.render(path, { format: "jpg", quality: 30 });
-				response.statusCode = 200;
-        response.write('Success: Screenshot saved to ' + path + "\n");
-        page.release();
-        response.close();
-      }, delay);
-    } else {
-			response.statusCode = 500;
-      response.write('Error: Url returned status ' + status + "\n");
-      page.release();
-      response.close();
-    }
-  });
   // must start the response now, or phantom closes the connection
   response.statusCode = 200;
   response.write('');
