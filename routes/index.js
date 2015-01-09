@@ -105,7 +105,7 @@ module.exports = function(app, useCors) {
 						console.log('ERR: ', error);
 				}
 				else {
-						console.log('RESPONSE: ', response.body);
+						console.log('RESPONSE: ', response.body, error, response.statusCode);
 				}
         console.log('Error while requesting the rasterizer: %s', msg);
         rasterizerService.restartService();
