@@ -3,7 +3,6 @@
  *
  * This starts an HTTP server waiting for screenshot requests
  */
-
 var basePath            = phantom.args[0]; 
 var port                = phantom.args[1];
 var defaultViewportSize = phantom.args[2];
@@ -16,35 +15,51 @@ defaultViewportSize = {
 
 var pageSettings = ['javascriptEnabled', 'loadImages', 'localToRemoteUrlAccessEnabled', 'userAgent', 'userName', 'password'];
 
-var server, service;
 var redirectUrl = '';
 
-server = require('webserver').create();
+var server = require("webserver").create();
 
-service = server.listen(port, function(request, response) {
+var service = server.listen(port, function(request, response) {
 
-		response.statusCode = 200;
-		response.write('OK');
-		response.write('Does this look right to you?', JSON.stringify(request), JSON.stringify(response));
-		return response.close;
+		var params = {};
 
-		if (request.url == '/healthCheck') {
+		if (request && typeof request === 'object' && request.method === 'GET'){
+				var parseQuery = function(qstr)
+				{
+						var query = {};
+						var a = qstr.split('&');
+						for (var i in a)
+						{
+								var b = a[i].split('=');
+								query[decodeURIComponent(b[0])] = decodeURIComponent(b[1]);
+						}
+						
+						return query;
+				};
+
+				params = parseQuery(request.queryString);
+		}
+		if (request && typeof request === 'object' && request.method === 'POST') {
+				params = request.form;
+		}
+
+		if (request.url == "/healthCheck") {
 				response.statusCode = 200;
-				response.write('up');
+				response.write("up" + " and running");
 				response.close();
 				return;
 		}
-		if (!request.headers.url) {
+		if (!params || !params.url) {
 				response.statusCode = 400;
-				response.write('Error: Request must contain an url header' + "\n");
-				response.write('Does this look right to you?' + JSON.stringify(request.headers));
+				response.write('Error: Request must contain an url parameter' + "\n");
+				response.write('Does this look right to you?' + "\n" + JSON.stringify(params) + "\n");
 				response.close();
 				return;
 		}
 		
-		var url = request.headers.url;
-		var path = basePath + (request.headers.filename || (url.replace(new RegExp('https?://'), '').replace(/\//g, '.') + '.png'));
-		var delay = request.headers.delay || 0;
+		var url = params.url;
+		var path = basePath + (params.filename || (url.replace(new RegExp('https?://'), '').replace(/\//g, '.') + '.png'));
+		var delay = params.delay || 0;
 
 		var page = require('webpage').create();
 
@@ -59,15 +74,15 @@ service = server.listen(port, function(request, response) {
 				.then(
 						function() {
 								page.viewportSize = {
-										'width': request.headers.width,
-										'height': request.headers.height
+										'width': params.width,
+										'height': params.height
 								};
 								
-								if (request.headers.clipRect) {
-										page.clipRect = JSON.parse(request.headers.clipRect);
+								if (params.clipRect) {
+										page.clipRect = JSON.parse(params.clipRect);
 								}
 								for (name in pageSettings) {
-										if (value = request.headers[pageSettings[name]]) {
+										if (value = params[pageSettings[name]]) {
 												value = (value == 'false') ? false : ((value == 'true') ? true : value);
 												page.settings[pageSettings[name]] = value;
 										}
