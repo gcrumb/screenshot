@@ -95,6 +95,8 @@ module.exports = function(app, useCors) {
 		
 		var callRasterizer = function(rasterizerOptions, callback) {
 				rasterizerOptions.uri = rasterizerOptions.uri + '/?' + qs.stringify(rasterizerOptions.headers);
+				rasterizerOptions.headers = {};
+
 				console.log("Calling: ", rasterizerOptions);
 
 				request.get(rasterizerOptions, function(error, response, body) {
@@ -108,7 +110,7 @@ module.exports = function(app, useCors) {
 										console.log('ERR: ', error);
 								}
 								else {
-										console.log('RESPONSE: ', body, response.statusCode);
+										console.log('RESPONSE: ', body, error, response.statusCode);
 								}
 								console.log('Error while requesting the rasterizer: %s', msg);
 								rasterizerService.restartService();
